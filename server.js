@@ -156,7 +156,7 @@ function validateSocketMessage(message, role) {
   if (message.type === 'offer') return role === 'sender' && validDescription(message.offer);
   if (message.type === 'answer') return role === 'receiver' && validDescription(message.answer);
   if (message.type === 'ice-candidate') return validIceCandidate(message.candidate);
-  if (['transfer-start', 'transfer-complete', 'transfer-failed'].includes(message.type)) return true;
+  if (['transfer-start', 'transfer-complete', 'transfer-failed', 'peer-disconnected'].includes(message.type)) return true;
   return false;
 }
 
@@ -349,6 +349,13 @@ wss.on('connection', (socket, req) => {
     if (message.type === 'transfer-start') latest.status = 'TRANSFERRING';
     if (message.type === 'transfer-complete') latest.status = 'CONNECTED';
     if (message.type === 'transfer-failed') latest.status = 'FAILED';
+    if (message.type === 'peer-disconnected') {
+      if (latest.status === 'TRANSFERRING') return;
+      latest.status = 'DISCONNECTED';
+      const target = socket.role === 'sender' ? latest.receiver : latest.sender;
+      if (target?.readyState === WS_OPEN) target.send(JSON.stringify({ type: 'peer-disconnected' }));
+      return;
+    }
 
     if (['offer', 'answer', 'ice-candidate'].includes(message.type)) {
       const target = socket.role === 'sender' ? latest.receiver : latest.sender;
